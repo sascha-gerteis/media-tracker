@@ -1,161 +1,121 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>QR Media Dashboard</title>
+  <title>QR Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 
 <body style="margin:0;font-family:Arial;background:#0f172a;color:white;">
 
 <div style="max-width:1200px;margin:auto;padding:30px;">
 
-<h1>QR Media Dashboard</h1>
+<h1>QR Dashboard</h1>
 
-<!-- CREATE -->
 <div style="background:#111827;padding:20px;border-radius:12px;margin-bottom:20px;">
-  <h2>Create QR</h2>
-
-  <input id="name" placeholder="Channel 7"
-    style="width:100%;padding:10px;margin-top:10px;border-radius:8px;border:none;">
-
-  <select id="platform"
-    style="width:100%;padding:10px;margin-top:10px;border-radius:8px;border:none;">
+  <input id="name" placeholder="Channel 7" style="width:100%;padding:10px;border-radius:8px;">
+  
+  <select id="platform" style="width:100%;margin-top:10px;padding:10px;border-radius:8px;">
     <option value="shopee">Shopee</option>
     <option value="lazada">Lazada</option>
   </select>
 
-  <button onclick="createQR()"
-    style="width:100%;margin-top:10px;padding:12px;background:#38bdf8;border:none;border-radius:8px;font-weight:bold;">
+  <button onclick="createQR()" style="width:100%;margin-top:10px;padding:12px;background:#38bdf8;border:none;border-radius:8px;">
     Generate QR
   </button>
 </div>
 
-<!-- STATS -->
-<div style="background:#111827;padding:20px;border-radius:12px;margin-bottom:20px;">
-  <h2>Analytics</h2>
-  <div id="stats"></div>
-</div>
-
-<!-- LIST -->
-<div style="background:#111827;padding:20px;border-radius:12px;">
-  <h2>All QR Codes</h2>
-  <div id="list"></div>
-</div>
+<div id="list"></div>
 
 </div>
 
 <script>
-const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
-const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84";
+const supabase = window.supabase.createClient(
+  "https://bmwcmfsraixtmjnjzhtz.supabase.co",
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84"
+);
 
-const TRACK_URL = SUPABASE_URL + "/functions/v1/track";
+const TRACK = "https://bmwcmfsraixtmjnjzhtz.supabase.co/functions/v1/track";
 
 const SHOPEE = "https://shopee.co.th/columbiapictures_aquaverse";
 const LAZADA = "https://www.lazada.co.th/shop/columbia-pictures-aquaverse";
 
-function slugify(text){
-  return text.toLowerCase().replace(/[^a-z0-9]+/g,"-");
+function slug(s){
+  return s.toLowerCase().replace(/[^a-z0-9]+/g,"-");
 }
 
 async function createQR(){
-  const name = document.getElementById("name").value.trim();
+  const name = document.getElementById("name").value;
   const platform = document.getElementById("platform").value;
 
   if(!name) return alert("Enter name");
 
-  const slug = slugify(name);
+  const slugName = slug(name);
   const dest = platform==="shopee"?SHOPEE:LAZADA;
 
-  await fetch(SUPABASE_URL+"/rest/v1/qr_codes",{
-    method:"POST",
-    headers:{
-      "apikey":KEY,
-      "Authorization":"Bearer "+KEY,
-      "Content-Type":"application/json"
-    },
-    body:JSON.stringify({
-      partner_name:name,
-      partner_slug:slug,
-      platform:platform,
-      destination_url:dest
-    })
+  const { error } = await supabase.from("qr_codes").insert({
+    partner_name:name,
+    partner_slug:slugName,
+    platform,
+    destination_url:dest
   });
+
+  if(error){
+    alert(error.message);
+    return;
+  }
 
   load();
 }
 
 async function load(){
-  // get QR codes + scan counts
-  const res = await fetch(
-    SUPABASE_URL+"/rest/v1/qr_codes?select=*,scans(count)",
-    {
-      headers:{
-        "apikey":KEY,
-        "Authorization":"Bearer "+KEY
-      }
-    }
-  );
+  const { data:qr } = await supabase.from("qr_codes").select("*");
+  const { data:scans } = await supabase.from("scans").select("qr_id");
 
-  const data = await res.json();
+  let counts = {};
+  scans.forEach(s=>{
+    counts[s.qr_id] = (counts[s.qr_id]||0)+1;
+  });
 
-  let total = 0;
+  let html="";
 
-  let html = "";
-
-  data.forEach(q=>{
-    const count = q.scans?.[0]?.count || 0;
-    total += count;
-
-    const url = TRACK_URL + "/" + q.partner_slug;
+  for(let q of qr){
+    const url = TRACK+"/"+q.partner_slug;
+    const count = counts[q.id] || 0;
 
     html += `
     <div style="margin-top:20px;padding:15px;background:#0b1220;border-radius:10px;">
-      <b>${q.partner_name}</b> (${q.platform})<br><br>
+      <b>${q.partner_name}</b><br><br>
 
       <canvas id="qr-${q.id}"></canvas><br><br>
 
-      <b>Scans:</b> ${count}<br><br>
+      Scans: ${count}<br><br>
 
-      <button onclick="downloadQR('${url}','${q.partner_slug}')"
-        style="margin-right:10px;">Download</button>
-
-      <button onclick="deleteQR('${q.id}')">Delete</button>
+      <button onclick="download('${url}','${q.partner_slug}')">Download</button>
+      <button onclick="del('${q.id}')">Delete</button>
     </div>
     `;
 
     setTimeout(()=>{
       QRCode.toCanvas(document.getElementById("qr-"+q.id), url);
     },100);
-  });
+  }
 
   document.getElementById("list").innerHTML = html;
-
-  document.getElementById("stats").innerHTML = `
-    Total QR Codes: ${data.length} <br>
-    Total Scans: ${total}
-  `;
 }
 
-function downloadQR(url,name){
-  const canvas = document.createElement("canvas");
-
-  QRCode.toCanvas(canvas, url, ()=>{
+function download(url,name){
+  QRCode.toDataURL(url,(err,data)=>{
     const a = document.createElement("a");
-    a.href = canvas.toDataURL();
-    a.download = name + ".png";
+    a.href = data;
+    a.download = name+".png";
     a.click();
   });
 }
 
-async function deleteQR(id){
-  await fetch(SUPABASE_URL+"/rest/v1/qr_codes?id=eq."+id,{
-    method:"DELETE",
-    headers:{
-      "apikey":KEY,
-      "Authorization":"Bearer "+KEY
-    }
-  });
-
+async function del(id){
+  await supabase.from("scans").delete().eq("qr_id",id);
+  await supabase.from("qr_codes").delete().eq("id",id);
   load();
 }
 
