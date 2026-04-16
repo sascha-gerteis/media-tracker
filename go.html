@@ -4,12 +4,63 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Redirecting...</title>
+  <style>
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #0f172a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: Arial, sans-serif;
+    }
+    .loader {
+      text-align: center;
+      color: #e5e7eb;
+      background: #111827;
+      padding: 32px 48px;
+      border-radius: 24px;
+      border: 1px solid #1f2937;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      margin: 0 auto 16px;
+      border: 3px solid #1f2937;
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .error {
+      color: #fecaca;
+      background: #3f1d1d;
+      padding: 16px 24px;
+      border-radius: 16px;
+      border: 1px solid #7f1d1d;
+      text-align: center;
+    }
+    a {
+      color: #7dd3fc;
+    }
+  </style>
 </head>
-<body style="font-family:Arial;background:#0f172a;color:white;display:flex;align-items:center;justify-content:center;height:100vh;">
-  Redirecting...
+<body>
+  <div id="content">
+    <div class="loader">
+      <div class="spinner"></div>
+      <div>Processing your QR code...</div>
+    </div>
+  </div>
+
   <script>
+    // ========== CONFIGURATION - REPLACE WITH YOUR VALUES ==========
     const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84";
+    // ============================================================
 
     function headers() {
       return {
@@ -24,58 +75,116 @@
         ...options,
         headers: { ...headers(), ...(options.headers || {}) }
       });
+
       const text = await res.text();
       let data;
       try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
       if (!res.ok) {
-        throw new Error(data?.message || data?.error || text || `HTTP ${res.status}`);
+        const message = data?.message || data?.error || text || `HTTP ${res.status}`;
+        throw new Error(message);
       }
       return data;
     }
 
-    async function run() {
+    async function recordAndRedirect() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const slug = urlParams.get('slug');
+
+      if (!slug) {
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            <strong>Invalid QR code</strong><br>
+            Missing tracking information.
+          </div>
+        `;
+        return;
+      }
+
       try {
-        const params = new URLSearchParams(window.location.search);
-        const slug = params.get("slug");
-        if (!slug) {
-          document.body.textContent = "Missing slug";
+        // Fetch QR code data from Supabase
+        const qrData = await api(`/rest/v1/qr_codes?select=id,destination_url&partner_slug=eq.${encodeURIComponent(slug)}&limit=1`);
+        
+        if (!qrData || qrData.length === 0) {
+          document.getElementById('content').innerHTML = `
+            <div class="error">
+              <strong>QR code not found</strong><br>
+              This code may have been deleted.
+            </div>
+          `;
           return;
         }
 
-        const qrRows = await api(`/rest/v1/qr_codes?select=*&partner_slug=eq.${encodeURIComponent(slug)}&limit=1`);
-        if (!qrRows || qrRows.length === 0) {
-          document.body.textContent = "QR not found";
-          return;
+        const qrId = qrData[0].id;
+        const destinationUrl = qrData[0].destination_url;
+
+        // Generate or retrieve visitor ID for this specific QR code
+        const storageKey = `visitor_${slug}`;
+        let visitorId = localStorage.getItem(storageKey);
+        
+        if (!visitorId) {
+          visitorId = crypto.randomUUID();
+          localStorage.setItem(storageKey, visitorId);
         }
 
-        const row = qrRows[0];
-
-        // unique scan = same qr_id + same user_agent only once
-        // IP is not available from GitHub Pages frontend
-        const userAgent = navigator.userAgent || "unknown";
-
-        const existing = await api(
-          `/rest/v1/scans?select=id&qr_id=eq.${encodeURIComponent(row.id)}&user_agent=eq.${encodeURIComponent(userAgent)}&limit=1`
-        );
-
-        if (!existing || existing.length === 0) {
-          await api(`/rest/v1/scans`, {
-            method: "POST",
-            body: JSON.stringify({
-              qr_id: row.id,
-              ip: "frontend",
-              user_agent: userAgent
-            })
-          });
+        // Check if this visitor has already been recorded for this QR code
+        const existingScans = await api(`/rest/v1/scans?select=id&qr_id=eq.${encodeURIComponent(qrId)}&visitor_id=eq.${encodeURIComponent(visitorId)}&limit=1`);
+        
+        if (!existingScans || existingScans.length === 0) {
+          // Record new unique scan
+          try {
+            await api("/rest/v1/scans", {
+              method: "POST",
+              body: JSON.stringify({
+                qr_id: qrId,
+                visitor_id: visitorId
+              })
+            });
+          } catch (insertErr) {
+            // If duplicate due to race condition, ignore silently
+            console.debug("Duplicate scan prevented:", insertErr.message);
+          }
         }
 
-        window.location.replace(row.destination_url);
+        // Redirect to final destination
+        window.location.href = destinationUrl;
+        
       } catch (err) {
-        document.body.textContent = "Redirect failed: " + err.message;
+        console.error("Tracking error:", err);
+        // Still try to redirect even if tracking fails
+        document.getElementById('content').innerHTML = `
+          <div class="error">
+            <strong>Tracking issue</strong><br>
+            ${escapeHtml(err.message)}<br>
+            <a href="#" id="manualRedirect">Click here to continue</a>
+          </div>
+        `;
+        document.getElementById('manualRedirect')?.addEventListener('click', async (e) => {
+          e.preventDefault();
+          try {
+            const fallbackData = await api(`/rest/v1/qr_codes?select=destination_url&partner_slug=eq.${encodeURIComponent(slug)}&limit=1`);
+            if (fallbackData && fallbackData[0]) {
+              window.location.href = fallbackData[0].destination_url;
+            } else {
+              window.location.href = "https://shopee.co.th/columbiapictures_aquaverse";
+            }
+          } catch {
+            window.location.href = "https://shopee.co.th/columbiapictures_aquaverse";
+          }
+        });
       }
     }
 
-    run();
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    recordAndRedirect();
   </script>
 </body>
 </html>
