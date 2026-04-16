@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Redirecting...</title>
+</head>
+
+<body>
+
+<script>
+const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
+const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84";
+
+const params = new URLSearchParams(window.location.search);
+
+const slug = params.get("slug");
+const redirect = decodeURIComponent(params.get("to"));
+
+// Track scan
+fetch(SUPABASE_URL + "/rest/v1/scans", {
+  method: "POST",
+  headers: {
+    "apikey": KEY,
+    "Authorization": "Bearer " + KEY,
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    qr_id: slug,
+    ip: "unknown",
+    user_agent: navigator.userAgent
+  })
+});
+
+// 🚀 INSTANT REDIRECT (THIS FIXES YOUR PROBLEM)
+window.location.href = redirect;
+
+</script>
+
+</body>
+</html>
