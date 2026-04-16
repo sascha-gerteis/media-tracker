@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>QR Tool</title>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+</head>
+
+<body style="background:#0f172a;color:white;font-family:Arial;padding:20px;">
+
+<h1>QR Tool</h1>
+
+<input id="name" placeholder="Channel 7"><br><br>
+
+<select id="platform">
+  <option value="shopee">Shopee</option>
+  <option value="lazada">Lazada</option>
+</select><br><br>
+
+<button onclick="createQR()">Generate QR</button>
+
+<br><br>
+<canvas id="qr"></canvas>
+
+<script>
+const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
+const FUNCTION_URL = SUPABASE_URL + "/functions/v1/track";
+
+const SHOPEE = "https://shopee.co.th/columbiapictures_aquaverse";
+const LAZADA = "https://www.lazada.co.th/shop/columbia-pictures-aquaverse";
+
+async function createQR() {
+  const name = document.getElementById("name").value;
+  const platform = document.getElementById("platform").value;
+
+  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+
+  const destination = platform === "shopee" ? SHOPEE : LAZADA;
+
+  // insert into Supabase
+  await fetch(SUPABASE_URL + "/rest/v1/qr_codes", {
+    method: "POST",
+    headers: {
+      "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84",
+      "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjMwOTkyMCwiZXhwIjoyMDkxODg1OTIwfQ.Ns74-D1TRILGa0iWwCDB-uB7TQxUFXGOiDfHcfYjlb8",
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      partner_name: name,
+      partner_slug: slug,
+      platform,
+      destination_url: destination
+    })
+  });
+
+  const trackURL = FUNCTION_URL + "/" + slug;
+
+  QRCode.toCanvas(document.getElementById("qr"), trackURL);
+}
+</script>
+
+</body>
+</html>
