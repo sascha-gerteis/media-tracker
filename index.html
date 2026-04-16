@@ -1,126 +1,452 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>QR Dashboard</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>QR Media Tracker</title>
   <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    .container {
+      max-width: 1300px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .title { margin-bottom: 20px; }
+    .title h1 { margin: 0 0 8px 0; font-size: 32px; }
+    .muted { color: #94a3b8; font-size: 14px; }
+    .alert {
+      padding: 14px 16px;
+      border-radius: 12px;
+      margin-bottom: 18px;
+      font-size: 14px;
+      display: none;
+      white-space: pre-wrap;
+    }
+    .success { background: #052e16; border: 1px solid #166534; color: #bbf7d0; }
+    .error { background: #3f1d1d; border: 1px solid #7f1d1d; color: #fecaca; }
+    .layout {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 24px;
+    }
+    .card {
+      background: #111827;
+      border: 1px solid #1f2937;
+      border-radius: 18px;
+      padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+    }
+    label {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #cbd5e1;
+    }
+    input, select, button {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      padding: 12px 14px;
+      font-size: 15px;
+    }
+    input, select {
+      background: #0b1220;
+      color: white;
+    }
+    .btn {
+      display: inline-block;
+      text-decoration: none;
+      text-align: center;
+      border-radius: 10px;
+      padding: 10px 12px;
+      font-size: 13px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+    }
+    .btn-primary { margin-top: 18px; background: #38bdf8; color: #082f49; }
+    .btn-download { background: #22c55e; color: #052e16; }
+    .btn-delete { background: #ef4444; color: white; }
+    .btn-link { background: #1e293b; color: #e5e7eb; }
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .stat {
+      background: #0b1220;
+      border: 1px solid #1e293b;
+      border-radius: 16px;
+      padding: 16px;
+    }
+    .stat .num { margin-top: 8px; font-size: 24px; font-weight: 700; word-break: break-word; }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th, td {
+      text-align: left;
+      vertical-align: top;
+      border-bottom: 1px solid #1f2937;
+      padding: 12px 10px;
+      font-size: 14px;
+    }
+    th { color: #cbd5e1; }
+    .qr-box { width: 120px; min-width: 120px; }
+    .qr-img {
+      width: 110px;
+      height: 110px;
+      object-fit: contain;
+      background: white;
+      border-radius: 10px;
+      padding: 6px;
+      display: block;
+    }
+    .pill {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: #1e293b;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
+    .actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-width: 130px;
+    }
+    .small-link {
+      color: #7dd3fc;
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .empty { padding: 22px 0; color: #94a3b8; }
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr; }
+      .table-wrap { overflow-x: auto; }
+    }
+  </style>
 </head>
-
-<body style="margin:0;font-family:Arial;background:#0f172a;color:white;">
-
-<div style="max-width:1200px;margin:auto;padding:30px;">
-
-<h1>QR Dashboard</h1>
-
-<div style="background:#111827;padding:20px;border-radius:12px;margin-bottom:20px;">
-  <input id="name" placeholder="Channel 7" style="width:100%;padding:10px;border-radius:8px;">
-  
-  <select id="platform" style="width:100%;margin-top:10px;padding:10px;border-radius:8px;">
-    <option value="shopee">Shopee</option>
-    <option value="lazada">Lazada</option>
-  </select>
-
-  <button onclick="createQR()" style="width:100%;margin-top:10px;padding:12px;background:#38bdf8;border:none;border-radius:8px;">
-    Generate QR
-  </button>
-</div>
-
-<div id="list"></div>
-
-</div>
-
-<script>
-const supabase = window.supabase.createClient(
-  "https://bmwcmfsraixtmjnjzhtz.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84"
-);
-
-const TRACK = "https://bmwcmfsraixtmjnjzhtz.supabase.co/functions/v1/track";
-
-const SHOPEE = "https://shopee.co.th/columbiapictures_aquaverse";
-const LAZADA = "https://www.lazada.co.th/shop/columbia-pictures-aquaverse";
-
-function slug(s){
-  return s.toLowerCase().replace(/[^a-z0-9]+/g,"-");
-}
-
-async function createQR(){
-  const name = document.getElementById("name").value;
-  const platform = document.getElementById("platform").value;
-
-  if(!name) return alert("Enter name");
-
-  const slugName = slug(name);
-  const dest = platform==="shopee"?SHOPEE:LAZADA;
-
-  const { error } = await supabase.from("qr_codes").insert({
-    partner_name:name,
-    partner_slug:slugName,
-    platform,
-    destination_url:dest
-  });
-
-  if(error){
-    alert(error.message);
-    return;
-  }
-
-  load();
-}
-
-async function load(){
-  const { data:qr } = await supabase.from("qr_codes").select("*");
-  const { data:scans } = await supabase.from("scans").select("qr_id");
-
-  let counts = {};
-  scans.forEach(s=>{
-    counts[s.qr_id] = (counts[s.qr_id]||0)+1;
-  });
-
-  let html="";
-
-  for(let q of qr){
-    const url = TRACK+"/"+q.partner_slug;
-    const count = counts[q.id] || 0;
-
-    html += `
-    <div style="margin-top:20px;padding:15px;background:#0b1220;border-radius:10px;">
-      <b>${q.partner_name}</b><br><br>
-
-      <canvas id="qr-${q.id}"></canvas><br><br>
-
-      Scans: ${count}<br><br>
-
-      <button onclick="download('${url}','${q.partner_slug}')">Download</button>
-      <button onclick="del('${q.id}')">Delete</button>
+<body>
+  <div class="container">
+    <div class="title">
+      <h1>QR Media Tracker</h1>
+      <div class="muted">Generate QR codes for Shopee or Lazada, track unique scans, download images, and delete codes.</div>
     </div>
-    `;
 
-    setTimeout(()=>{
-      QRCode.toCanvas(document.getElementById("qr-"+q.id), url);
-    },100);
-  }
+    <div id="successBox" class="alert success"></div>
+    <div id="errorBox" class="alert error"></div>
 
-  document.getElementById("list").innerHTML = html;
-}
+    <div class="layout">
+      <div class="card">
+        <h2>Create QR Code</h2>
+        <div class="muted">Enter the outlet name and select the destination.</div>
 
-function download(url,name){
-  QRCode.toDataURL(url,(err,data)=>{
-    const a = document.createElement("a");
-    a.href = data;
-    a.download = name+".png";
-    a.click();
-  });
-}
+        <label>News outlet / partner name</label>
+        <input id="partnerName" type="text" placeholder="e.g. Channel 7" />
 
-async function del(id){
-  await supabase.from("scans").delete().eq("qr_id",id);
-  await supabase.from("qr_codes").delete().eq("id",id);
-  load();
-}
+        <label>Destination platform</label>
+        <select id="platform">
+          <option value="shopee">Shopee</option>
+          <option value="lazada">Lazada</option>
+        </select>
 
-load();
-</script>
+        <button id="createBtn" class="btn btn-primary">Generate QR Code</button>
+      </div>
 
+      <div>
+        <div class="stats">
+          <div class="stat">
+            <div class="muted">Total QR codes</div>
+            <div id="statQr" class="num">0</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Unique scans</div>
+            <div id="statScans" class="num">0</div>
+          </div>
+          <div class="stat">
+            <div class="muted">Top partner</div>
+            <div id="statTop" class="num" style="font-size:20px;">—</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Generated QR Codes</h2>
+          <div class="muted">Each code shows its QR image, tracking link, unique scan count, download button, and delete button.</div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>QR</th>
+                  <th>Partner</th>
+                  <th>Platform</th>
+                  <th>Tracking</th>
+                  <th>Unique Scans</th>
+                  <th>Created</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody id="qrTableBody">
+                <tr><td colspan="7" class="empty">Loading…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84";
+    const TRACK_BASE = `${SUPABASE_URL}/functions/v1/track`;
+
+    const SHOPEE_URL = "https://shopee.co.th/columbiapictures_aquaverse";
+    const LAZADA_URL = "https://www.lazada.co.th/shop/columbia-pictures-aquaverse";
+
+    const successBox = document.getElementById("successBox");
+    const errorBox = document.getElementById("errorBox");
+    const createBtn = document.getElementById("createBtn");
+
+    function headers() {
+      return {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json"
+      };
+    }
+
+    function showSuccess(msg) {
+      successBox.textContent = msg;
+      successBox.style.display = "block";
+      errorBox.style.display = "none";
+    }
+
+    function showError(msg) {
+      errorBox.textContent = msg;
+      errorBox.style.display = "block";
+      successBox.style.display = "none";
+    }
+
+    function clearMessages() {
+      successBox.style.display = "none";
+      errorBox.style.display = "none";
+    }
+
+    function slugify(text) {
+      return text.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    }
+
+    async function api(path, options = {}) {
+      const res = await fetch(`${SUPABASE_URL}${path}`, {
+        ...options,
+        headers: { ...headers(), ...(options.headers || {}) }
+      });
+
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+      if (!res.ok) {
+        const message = data?.message || data?.error || text || `HTTP ${res.status}`;
+        throw new Error(message);
+      }
+      return data;
+    }
+
+    async function getUniqueSlug(baseSlug) {
+      let slug = baseSlug;
+      let counter = 2;
+
+      while (true) {
+        const data = await api(`/rest/v1/qr_codes?select=id&partner_slug=eq.${encodeURIComponent(slug)}&limit=1`);
+        if (!data || data.length === 0) return slug;
+        slug = `${baseSlug}-${counter}`;
+        counter++;
+      }
+    }
+
+    function makeQrDataUrl(text) {
+      return new Promise((resolve, reject) => {
+        QRCode.toDataURL(text, { width: 220, margin: 1 }, (err, url) => {
+          if (err) reject(err);
+          else resolve(url);
+        });
+      });
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    async function createQrCode() {
+      clearMessages();
+
+      const partnerName = document.getElementById("partnerName").value.trim();
+      const platform = document.getElementById("platform").value;
+
+      if (!partnerName) {
+        showError("Enter a partner name.");
+        return;
+      }
+
+      const baseSlug = slugify(partnerName);
+      if (!baseSlug) {
+        showError("Invalid partner name.");
+        return;
+      }
+
+      createBtn.disabled = true;
+      createBtn.textContent = "Generating...";
+
+      try {
+        const uniqueSlug = await getUniqueSlug(baseSlug);
+        const destinationUrl = platform === "shopee" ? SHOPEE_URL : LAZADA_URL;
+
+        await api("/rest/v1/qr_codes", {
+          method: "POST",
+          body: JSON.stringify({
+            partner_name: partnerName,
+            partner_slug: uniqueSlug,
+            platform,
+            destination_url: destinationUrl
+          })
+        });
+
+        document.getElementById("partnerName").value = "";
+        document.getElementById("platform").value = "shopee";
+
+        showSuccess(`QR code created for ${partnerName}.`);
+        await loadDashboard();
+      } catch (err) {
+        showError(`Create failed: ${err.message}`);
+      } finally {
+        createBtn.disabled = false;
+        createBtn.textContent = "Generate QR Code";
+      }
+    }
+
+    async function deleteQrCode(id) {
+      clearMessages();
+      if (!confirm("Delete this QR code?")) return;
+
+      try {
+        await api(`/rest/v1/scans?qr_id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+        await api(`/rest/v1/qr_codes?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
+        showSuccess("QR code deleted successfully.");
+        await loadDashboard();
+      } catch (err) {
+        showError(`Delete failed: ${err.message}`);
+      }
+    }
+
+    async function downloadQrCode(slug) {
+      try {
+        const trackUrl = `${TRACK_BASE}/${encodeURIComponent(slug)}`;
+        const dataUrl = await makeQrDataUrl(trackUrl);
+        const a = document.createElement("a");
+        a.href = dataUrl;
+        a.download = `${slug}.png`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      } catch (err) {
+        showError(`Download failed: ${err.message}`);
+      }
+    }
+
+    async function loadDashboard() {
+      try {
+        const [qrRows, scanRows] = await Promise.all([
+          api("/rest/v1/qr_codes?select=*&order=created_at.desc"),
+          api("/rest/v1/scans?select=qr_id")
+        ]);
+
+        const counts = {};
+        for (const s of scanRows || []) {
+          counts[s.qr_id] = (counts[s.qr_id] || 0) + 1;
+        }
+
+        const totalQr = (qrRows || []).length;
+        const totalScans = Object.values(counts).reduce((a, b) => a + b, 0);
+
+        let topPartner = "—";
+        let topCount = -1;
+        for (const q of qrRows || []) {
+          const c = counts[q.id] || 0;
+          if (c > topCount) {
+            topCount = c;
+            topPartner = c > 0 ? q.partner_name : "—";
+          }
+        }
+
+        document.getElementById("statQr").textContent = totalQr;
+        document.getElementById("statScans").textContent = totalScans;
+        document.getElementById("statTop").textContent = topPartner;
+
+        const tbody = document.getElementById("qrTableBody");
+
+        if (!qrRows || qrRows.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="7" class="empty">No QR codes created yet.</td></tr>`;
+          return;
+        }
+
+        const htmlParts = [];
+        for (const row of qrRows) {
+          const scanCount = counts[row.id] || 0;
+          const trackUrl = `${TRACK_BASE}/${encodeURIComponent(row.partner_slug)}`;
+          const qrImgUrl = await makeQrDataUrl(trackUrl);
+
+          htmlParts.push(`
+            <tr>
+              <td class="qr-box">
+                <img class="qr-img" src="${qrImgUrl}" alt="QR code">
+              </td>
+              <td>
+                <strong>${escapeHtml(row.partner_name)}</strong><br>
+                <span class="muted">${escapeHtml(row.partner_slug)}</span>
+              </td>
+              <td>
+                <span class="pill">${escapeHtml((row.platform || "").charAt(0).toUpperCase() + (row.platform || "").slice(1))}</span>
+              </td>
+              <td>
+                <a class="small-link" href="${trackUrl}" target="_blank">${trackUrl}</a>
+              </td>
+              <td><strong>${scanCount}</strong></td>
+              <td>${escapeHtml(row.created_at || "")}</td>
+              <td>
+                <div class="actions">
+                  <button class="btn btn-download" onclick="downloadQrCode('${row.partner_slug}')">Download</button>
+                  <a class="btn btn-link" href="${trackUrl}" target="_blank">Open Link</a>
+                  <button class="btn btn-delete" onclick="deleteQrCode('${row.id}')">Delete</button>
+                </div>
+              </td>
+            </tr>
+          `);
+        }
+
+        tbody.innerHTML = htmlParts.join("");
+      } catch (err) {
+        showError(`Load failed: ${err.message}`);
+      }
+    }
+
+    createBtn.addEventListener("click", createQrCode);
+    loadDashboard();
+  </script>
 </body>
 </html>
