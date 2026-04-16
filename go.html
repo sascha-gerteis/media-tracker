@@ -1,39 +1,81 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Redirecting...</title>
 </head>
+<body style="font-family:Arial;background:#0f172a;color:white;display:flex;align-items:center;justify-content:center;height:100vh;">
+  Redirecting...
+  <script>
+    const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
+    const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84";
 
-<body>
+    function headers() {
+      return {
+        "apikey": SUPABASE_ANON_KEY,
+        "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
+        "Content-Type": "application/json"
+      };
+    }
 
-<script>
-const SUPABASE_URL = "https://bmwcmfsraixtmjnjzhtz.supabase.co";
-const KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJtd2NtZnNyYWl4dG1qbmp6aHR6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMDk5MjAsImV4cCI6MjA5MTg4NTkyMH0.zNqBuDUX8B1saCkseEqKzl31FYgqJmsta63pnWnjU84";
+    async function api(path, options = {}) {
+      const res = await fetch(`${SUPABASE_URL}${path}`, {
+        ...options,
+        headers: { ...headers(), ...(options.headers || {}) }
+      });
+      const text = await res.text();
+      let data;
+      try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+      if (!res.ok) {
+        throw new Error(data?.message || data?.error || text || `HTTP ${res.status}`);
+      }
+      return data;
+    }
 
-const params = new URLSearchParams(window.location.search);
+    async function run() {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const slug = params.get("slug");
+        if (!slug) {
+          document.body.textContent = "Missing slug";
+          return;
+        }
 
-const slug = params.get("slug");
-const redirect = decodeURIComponent(params.get("to"));
+        const qrRows = await api(`/rest/v1/qr_codes?select=*&partner_slug=eq.${encodeURIComponent(slug)}&limit=1`);
+        if (!qrRows || qrRows.length === 0) {
+          document.body.textContent = "QR not found";
+          return;
+        }
 
-// Track scan
-fetch(SUPABASE_URL + "/rest/v1/scans", {
-  method: "POST",
-  headers: {
-    "apikey": KEY,
-    "Authorization": "Bearer " + KEY,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    qr_id: slug,
-    ip: "unknown",
-    user_agent: navigator.userAgent
-  })
-});
+        const row = qrRows[0];
 
-// 🚀 INSTANT REDIRECT (THIS FIXES YOUR PROBLEM)
-window.location.href = redirect;
+        // unique scan = same qr_id + same user_agent only once
+        // IP is not available from GitHub Pages frontend
+        const userAgent = navigator.userAgent || "unknown";
 
-</script>
+        const existing = await api(
+          `/rest/v1/scans?select=id&qr_id=eq.${encodeURIComponent(row.id)}&user_agent=eq.${encodeURIComponent(userAgent)}&limit=1`
+        );
 
+        if (!existing || existing.length === 0) {
+          await api(`/rest/v1/scans`, {
+            method: "POST",
+            body: JSON.stringify({
+              qr_id: row.id,
+              ip: "frontend",
+              user_agent: userAgent
+            })
+          });
+        }
+
+        window.location.replace(row.destination_url);
+      } catch (err) {
+        document.body.textContent = "Redirect failed: " + err.message;
+      }
+    }
+
+    run();
+  </script>
 </body>
 </html>
