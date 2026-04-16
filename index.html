@@ -243,9 +243,10 @@
       errorBox.style.display = "none";
     }
 
-    function getTrackingUrl(slug) {
-      // Assumes go.html is in the same directory as index.html
-      return `./go.html?slug=${encodeURIComponent(slug)}`;
+    // NEW: Build absolute URL for go.html (works on GitHub Pages with subfolders)
+    function getAbsoluteTrackingUrl(slug) {
+      const baseUrl = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+      return `${baseUrl}go.html?slug=${encodeURIComponent(slug)}`;
     }
 
     function slugify(text) {
@@ -351,7 +352,6 @@
       if (!confirm("Delete this QR code?")) return;
 
       try {
-        // Delete associated scans first (cascade is set in DB but explicit is safer)
         await api(`/rest/v1/scans?qr_id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
         await api(`/rest/v1/qr_codes?id=eq.${encodeURIComponent(id)}`, { method: "DELETE" });
         showSuccess("QR code deleted successfully.");
@@ -363,7 +363,7 @@
 
     async function downloadQrCode(slug) {
       try {
-        const trackUrl = getTrackingUrl(slug);
+        const trackUrl = getAbsoluteTrackingUrl(slug);
         const dataUrl = await makeQrDataUrl(trackUrl);
         const a = document.createElement("a");
         a.href = dataUrl;
@@ -415,7 +415,7 @@
         const htmlParts = [];
         for (const row of qrRows) {
           const scanCount = counts[row.id] || 0;
-          const trackUrl = getTrackingUrl(row.partner_slug);
+          const trackUrl = getAbsoluteTrackingUrl(row.partner_slug);
           const qrImgUrl = await makeQrDataUrl(trackUrl);
 
           htmlParts.push(`
